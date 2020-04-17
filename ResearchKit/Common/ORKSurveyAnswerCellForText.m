@@ -40,6 +40,13 @@
 #import "ORKHelpers_Internal.h"
 #import "ORKSkin.h"
 
+static const CGFloat TextViewTopPadding = 8.0;
+static const CGFloat TextViewBottomPadding = 16.0;
+static const CGFloat TextViewMinimumHeight = 140.0;
+static const CGFloat ErrorLabelTopPadding = 4.0;
+static const CGFloat ErrorLabelBottomPadding = 10.0;
+static const CGFloat StandardSpacing = 8.0;
+
 
 @interface ORKSurveyAnswerCellForText () <UITextViewDelegate>
 
@@ -51,6 +58,9 @@
 @implementation ORKSurveyAnswerCellForText {
     NSInteger _maxLength;
     NSString *_defaultTextAnswer;
+    UILabel *_textCountLabel;
+    UIButton *_clearTextViewButton;
+    UIView *_bottomSeperatorView;
 }
 
 - (void)applyAnswerFormat {
@@ -104,8 +114,6 @@
         
         ORKEnableAutoLayoutForViews(@[_textView]);
         
-        [self setUpConstraints];
-        
         [self applyAnswerFormat];
         
         [self answerDidChange];
@@ -114,6 +122,47 @@
         // See also ORKCustomStepView -accessibilityElements
         self.accessibilityElements = @[self.textView];
     }
+    
+    if (_bottomSeperatorView == nil) {
+        _bottomSeperatorView = [UIView new];
+        
+        if (@available(iOS 13.0, *)) {
+            [_bottomSeperatorView setBackgroundColor:[UIColor separatorColor]];
+        } else {
+            [_bottomSeperatorView setBackgroundColor:[UIColor lightGrayColor]];
+        }
+        _bottomSeperatorView.translatesAutoresizingMaskIntoConstraints = NO;
+        [self addSubview:_bottomSeperatorView];
+    }
+    
+    if (_textCountLabel == nil) {
+        _textCountLabel = [UILabel new];
+        if (@available(iOS 13.0, *)) {
+            [_textCountLabel setTextColor:[UIColor labelColor]];
+        } else {
+            [_textCountLabel setTextColor:[UIColor grayColor]];
+        }
+        if (_maxLength > 0) {
+            [self updateTextCountLabel];
+        } else {
+            [_textCountLabel setHidden:YES];
+        }
+        
+        _textCountLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        [self addSubview: _textCountLabel];
+    }
+    
+    if (_clearTextViewButton == nil) {
+        _clearTextViewButton = [UIButton new];
+        [_clearTextViewButton setTitle:ORKLocalizedString(@"BUTTON_CLEAR", nil) forState:UIControlStateNormal];
+        [_clearTextViewButton setBackgroundColor:[UIColor clearColor]];
+        [_clearTextViewButton setTitleColor:self.tintColor forState:UIControlStateNormal];
+        [_clearTextViewButton addTarget:self action:@selector(clearTextView) forControlEvents:UIControlEventTouchUpInside];
+        _clearTextViewButton.translatesAutoresizingMaskIntoConstraints = NO;
+        [self addSubview: _clearTextViewButton];
+    }
+    
+    [self setUpConstraints];
     [super prepareView];
 }
 
@@ -134,17 +183,67 @@
 
 - (void)setUpConstraints {
     NSMutableArray *constraints = [NSMutableArray array];
-
-    NSDictionary *views = NSDictionaryOfVariableBindings(_textView);
     
-    [constraints addObjectsFromArray:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|-[_textView]-|"
+    NSDictionary *views = NSDictionaryOfVariableBindings(_textView,_bottomSeperatorView, _textCountLabel);
+    
+    [constraints addObjectsFromArray:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|-textViewTopPadding-[_textView(>=textViewMinimumHeight)]-textViewBottomPadding-[_bottomSeperatorView]-textViewBottomPadding-[_textCountLabel]-|"
                                                                              options:(NSLayoutFormatOptions)0
-                                                                             metrics:nil
+                                                                             metrics:@{@"textViewTopPadding": @(TextViewTopPadding), @"textViewBottomPadding": @(TextViewBottomPadding), @"textViewMinimumHeight": @(TextViewMinimumHeight)}
                                                                                views:views]];
+    
     [constraints addObjectsFromArray:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|-[_textView]-|"
                                                                              options:(NSLayoutFormatOptions)0
                                                                              metrics:nil
                                                                                views:views]];
+    
+    [constraints addObjectsFromArray:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[_bottomSeperatorView]|"
+                                                                             options:(NSLayoutFormatOptions)0
+                                                                             metrics:nil
+                                                                               views:views]];
+    
+    CGFloat separatorHeight = 1.0 / [UIScreen mainScreen].scale;
+    
+    
+    [constraints addObject:[NSLayoutConstraint constraintWithItem:_bottomSeperatorView
+                                                        attribute:NSLayoutAttributeHeight
+                                                        relatedBy:NSLayoutRelationEqual
+                                                           toItem:nil
+                                                        attribute:NSLayoutAttributeNotAnAttribute
+                                                       multiplier:1.0
+                                                         constant:separatorHeight]];
+    
+    [constraints addObject:[NSLayoutConstraint constraintWithItem:_textCountLabel
+                                                        attribute:NSLayoutAttributeLeft
+                                                        relatedBy:NSLayoutRelationEqual
+                                                           toItem:_textView
+                                                        attribute:NSLayoutAttributeLeft
+                                                       multiplier:1.0
+                                                         constant:0.0]];
+    
+    [constraints addObject:[NSLayoutConstraint constraintWithItem:_textCountLabel
+                                                        attribute:NSLayoutAttributeHeight
+                                                        relatedBy:NSLayoutRelationEqual
+                                                           toItem:_clearTextViewButton
+                                                        attribute:NSLayoutAttributeHeight
+                                                       multiplier:1.0
+                                                         constant:0.0]];
+    
+    [constraints addObject:[NSLayoutConstraint constraintWithItem:_clearTextViewButton
+                                                        attribute:NSLayoutAttributeRight
+                                                        relatedBy:NSLayoutRelationEqual
+                                                           toItem:_textView
+                                                        attribute:NSLayoutAttributeRight
+                                                       multiplier:1.0
+                                                         constant:0.0]];
+    
+    [constraints addObject:[NSLayoutConstraint constraintWithItem:_clearTextViewButton
+                                                        attribute:NSLayoutAttributeCenterY
+                                                        relatedBy:NSLayoutRelationEqual
+                                                           toItem:_textCountLabel
+                                                        attribute:NSLayoutAttributeCenterY
+                                                       multiplier:1.0
+                                                         constant:0.0]];
+    
     // Get full width layout
     [constraints addObject:[self.class fullWidthLayoutConstraint:_textView]];
     
@@ -152,11 +251,25 @@
 }
 
 + (BOOL)shouldDisplayWithSeparators {
-    return YES;
+    return NO;
 }
 
 - (void)textDidChange {
     [self ork_setAnswer:(self.textView.text.length > 0) ? self.textView.text : ORKNullAnswerValue()];
+}
+
+- (void)updateTextCountLabel {
+    if (_maxLength > 0) {
+        NSString *text = [[self.textView.text componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]] componentsJoinedByString:@""];
+        NSString *textCountLabelText = [[NSString alloc] initWithFormat:@"%lu/%li", (unsigned long)text.length, (long)_maxLength];
+        _textCountLabel.text = textCountLabelText;
+    }
+}
+
+- (void)clearTextView {
+    self.textView.text = @"";
+    [self textDidChange];
+    [self updateTextCountLabel];
 }
 
 - (BOOL)shouldContinue {
@@ -175,15 +288,15 @@
 }
 
 - (BOOL)textView:(UITextView *)textView shouldChangeTextInRange:(NSRange)range replacementText:(NSString *)text {
-
+    
     NSString *string = [textView.text stringByReplacingCharactersInRange:range withString:text];
-
+    
     // Only need to validate the text if the user enters a character other than a backspace.
     // For example, if the `textView.text = researchki` and the `string = researchkit`.
     if (textView.text.length < string.length) {
-    
+        
         string = [[string componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]] componentsJoinedByString:@""];
-    
+        
         if (_maxLength > 0 && string.length > _maxLength) {
             [self showValidityAlertWithMessage:[[self.step impliedAnswerFormat] localizedInvalidValueStringWithAnswerString:string]];
             return NO;
@@ -195,6 +308,7 @@
 
 - (void)textViewDidChange:(UITextView *)textView {
     [self textDidChange];
+    [self updateTextCountLabel];
 }
 
 + (CGFloat)suggestedCellHeightForView:(UIView *)view {
@@ -207,31 +321,62 @@
 @interface ORKSurveyAnswerCellForTextField ()
 
 @property (nonatomic, strong) ORKAnswerTextField *textField;
+@property (nonatomic, strong) UILabel *errorLabel;
 
 @end
 
 
-@implementation ORKSurveyAnswerCellForTextField
+@implementation ORKSurveyAnswerCellForTextField {
+    NSMutableArray *constraints;
+    NSString *_defaultTextAnswer;
+}
 
 - (BOOL)becomeFirstResponder {
     return [self.textField becomeFirstResponder];
 }
 
 - (void)textFieldCell_initialize {
+    ORKAnswerFormat *answerFormat = [self.step impliedAnswerFormat];
+    ORKTextAnswerFormat *textAnswerFormat = ORKDynamicCast(answerFormat, ORKTextAnswerFormat);
+    
+    _defaultTextAnswer = textAnswerFormat.defaultTextAnswer;
+    
     _textField = [[ORKAnswerTextField alloc] initWithFrame:CGRectZero];
     _textField.text = @"";
     
-    _textField.placeholder = self.step.placeholder ? : ORKLocalizedString(@"PLACEHOLDER_TEXT_OR_NUMBER", nil);
+    NSString *placeholder = textAnswerFormat.placeholder ? :
+        (self.step.placeholder ? : ORKLocalizedString(@"PLACEHOLDER_TEXT_OR_NUMBER", nil));
+    _textField.placeholder = placeholder;
     _textField.textAlignment = NSTextAlignmentNatural;
     _textField.delegate = self;
     _textField.keyboardType = UIKeyboardTypeDefault;
-
+    
     [_textField addTarget:self action:@selector(textFieldDidChange:) forControlEvents:UIControlEventEditingChanged];
+    self.accessibilityElements = @[_textField];
     
     [self addSubview:_textField];
     ORKEnableAutoLayoutForViews(@[_textField]);
     
+    if (_errorLabel == nil) {
+        _errorLabel = [UILabel new];
+        [_errorLabel setTextColor: [UIColor redColor]];
+        [self.errorLabel setFont:[UIFont preferredFontForTextStyle:UIFontTextStyleFootnote]];
+        _errorLabel.numberOfLines = 0;
+        _errorLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        [self addSubview:_errorLabel];
+    }
+    
+    
     [self setUpConstraints];
+}
+
+- (void)assignDefaultAnswer {
+    if (_defaultTextAnswer) {
+        [self ork_setAnswer:_defaultTextAnswer];
+        if (self.textField) {
+            self.textField.text = _defaultTextAnswer;
+        }
+    }
 }
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
@@ -239,24 +384,29 @@
 }
 
 - (void)setUpConstraints {
-    NSMutableArray *constraints = [NSMutableArray new];
-    NSDictionary *views = NSDictionaryOfVariableBindings(_textField);
-    [constraints addObjectsFromArray:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|-[_textField]-|"
-                                                                             options:NSLayoutFormatDirectionLeadingToTrailing
-                                                                             metrics:nil
-                                                                               views:views]];
+    if (constraints != nil) {
+        [NSLayoutConstraint deactivateConstraints:constraints];
+    }
+    
+    constraints = [NSMutableArray new];
 
-    [constraints addObjectsFromArray:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|-[_textField]-|"
-                                                                             options:NSLayoutFormatDirectionLeadingToTrailing
-                                                                             metrics:nil
-                                                                               views:views]];
+    [[_textField.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:StandardSpacing] setActive:YES];
+    [[_textField.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-StandardSpacing] setActive:YES];
+    [[_textField.topAnchor constraintEqualToAnchor:self.topAnchor constant:0.0] setActive:YES];
+    [[_textField.bottomAnchor constraintEqualToAnchor:_errorLabel.topAnchor constant:ErrorLabelTopPadding] setActive:YES];
+    
+    [[_errorLabel.leadingAnchor constraintEqualToAnchor:_textField.leadingAnchor constant:0.0] setActive:YES];
+    [[_errorLabel.trailingAnchor constraintEqualToAnchor:_textField.trailingAnchor constant:0.0] setActive:YES];
+    
+    [[self.bottomAnchor constraintEqualToAnchor:_errorLabel.bottomAnchor constant:ErrorLabelBottomPadding] setActive:YES];
+    
     // Get a full width layout
     [constraints addObject:[self.class fullWidthLayoutConstraint:_textField]];
     [NSLayoutConstraint activateConstraints:constraints];
 }
 
 + (BOOL)shouldDisplayWithSeparators {
-    return YES;
+    return NO;
 }
 
 - (void)prepareView {
@@ -272,7 +422,7 @@
 - (BOOL)shouldContinue {
     ORKTextAnswerFormat *answerFormat = (ORKTextAnswerFormat *)[self.step impliedAnswerFormat];
     if (![answerFormat isAnswerValidWithString:self.textField.text]) {
-        [self showValidityAlertWithMessage:[[self.step impliedAnswerFormat] localizedInvalidValueStringWithAnswerString:self.answer]];
+        [self updateErrorLabelWithMessage:[[self.step impliedAnswerFormat] localizedInvalidValueStringWithAnswerString:self.textField.text]];
         return NO;
     }
     
@@ -297,12 +447,70 @@
     }
     NSString *displayValue = (answer && answer != ORKNullAnswerValue()) ? answer : nil;
     
-    self.textField.text = displayValue;
+    if (displayValue == nil && _defaultTextAnswer) {
+        [self assignDefaultAnswer];
+    } else {
+        self.textField.text = displayValue;
+    }
 }
 
 - (void)textFieldDidChange:(UITextField *)textField {
+    [self checkTextAndSetAnswer];
+}
+
+- (void)checkTextAndSetAnswer {
     NSString *text = self.textField.text;
-    [self ork_setAnswer:text.length ? text : ORKNullAnswerValue()];
+    ORKTextAnswerFormat *answerFormat = (ORKTextAnswerFormat *)[self.step impliedAnswerFormat];
+    
+    if (text.length && [answerFormat isAnswerValidWithString:text]) {
+        [self ork_setAnswer:text];
+    } else {
+        [self ork_setAnswer:ORKNullAnswerValue()];
+        [self removeErrorMessage];
+    }
+}
+
+- (void)updateErrorLabelWithMessage:(NSString *)message {
+    NSString *separatorString = @":";
+    NSString *stringtoParse = message ? : ORKLocalizedString(@"RANGE_ALERT_TITLE", @"");
+    NSString *parsedString = [stringtoParse componentsSeparatedByString:separatorString].firstObject;
+    
+    if (![self.accessibilityElements containsObject:self.errorLabel]) {
+        self.accessibilityElements = [self.accessibilityElements arrayByAddingObject:self.errorLabel];
+    }
+    
+    if (@available(iOS 13.0, *)) {
+        
+        NSString *errorMessage = [NSString stringWithFormat:@" %@", parsedString];
+        NSMutableAttributedString *fullString = [[NSMutableAttributedString alloc] initWithString:errorMessage];
+        NSTextAttachment *imageAttachment = [NSTextAttachment new];
+        
+        UIImageSymbolConfiguration *imageConfig = [UIImageSymbolConfiguration configurationWithPointSize:12 weight:UIImageSymbolWeightRegular scale:UIImageSymbolScaleMedium];
+        UIImage *exclamationMarkImage = [UIImage systemImageNamed:@"exclamationmark.circle"];
+        UIImage *configuredImage = [exclamationMarkImage imageByApplyingSymbolConfiguration:imageConfig];
+        
+        imageAttachment.image = [configuredImage imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+        
+        NSAttributedString *imageString = [NSAttributedString attributedStringWithAttachment:imageAttachment];
+        
+        [fullString insertAttributedString:imageString atIndex:0];
+        
+        self.errorLabel.attributedText = fullString;
+    } else {
+        NSMutableAttributedString *fullString = [[NSMutableAttributedString alloc] initWithString:parsedString];
+        self.errorLabel.attributedText = fullString;
+    }
+    
+    [self setUpConstraints];
+}
+
+- (void)removeErrorMessage {
+    self.errorLabel.attributedText = nil;
+    if ([self.accessibilityElements containsObject:self.errorLabel]) {
+        NSMutableArray *tempArray = [self.accessibilityElements mutableCopy];
+        [tempArray removeObject:self.errorLabel];
+        self.accessibilityElements = [tempArray copy];
+    }
 }
 
 #pragma mark - UITextFieldDelegate
@@ -316,18 +524,18 @@
     // Only need to validate the text if the user enters a character other than a backspace.
     // For example, if the `textField.text = researchki` and the `text = researchkit`.
     if (textField.text.length < text.length) {
-    
+        
         text = [[text componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]] componentsJoinedByString:@""];
-    
+        
         NSInteger maxLength = [(ORKTextAnswerFormat *)impliedFormat maximumLength];
-    
+        
         if (maxLength > 0 && text.length > maxLength) {
-            [self showValidityAlertWithMessage:[[self.step impliedAnswerFormat] localizedInvalidValueStringWithAnswerString:text]];
+            [self updateErrorLabelWithMessage:[[self.step impliedAnswerFormat] localizedInvalidValueStringWithAnswerString:text]];
             return NO;
         }
     }
     
-    [self ork_setAnswer:text.length ? text : ORKNullAnswerValue()];
+    [self checkTextAndSetAnswer];
     
     return YES;
 }
@@ -338,12 +546,17 @@
 
 - (BOOL)textFieldShouldReturn:(UITextField *)textField {
     [self.textField resignFirstResponder];
+    
     return YES;
 }
 
 - (void)textFieldDidEndEditing:(UITextField *)textField {
     NSString *text = self.textField.text;
-    [self ork_setAnswer:text.length ? text : ORKNullAnswerValue()];
+    ORKTextAnswerFormat *answerFormat = (ORKTextAnswerFormat *)[self.step impliedAnswerFormat];
+    
+    if (text.length && ![answerFormat isAnswerValidWithString:text]) {
+        [self updateErrorLabelWithMessage:[[self.step impliedAnswerFormat] localizedInvalidValueStringWithAnswerString:self.textField.text]];
+    }
 }
 
 @end
