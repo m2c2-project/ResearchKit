@@ -30,6 +30,7 @@
 
 
 @import UIKit;
+@import WebKit;
 
 
 NS_ASSUME_NONNULL_BEGIN
@@ -43,12 +44,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
-
+__attribute__ ((deprecated))
 @interface ORKConsentReviewController : UIViewController
 
 - (instancetype)initWithHTML:(NSString *)html delegate:(id<ORKConsentReviewControllerDelegate>)delegate requiresScrollToBottom:(BOOL)requiresScrollToBottom;
 
-@property (nonatomic, strong, nullable) UIWebView *webView;
+@property (nonatomic, strong, nullable) WKWebView *webView;
 
 @property (nonatomic, strong, nullable) UIBarButtonItem *cancelButtonItem;
 

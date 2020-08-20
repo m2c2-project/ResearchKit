@@ -31,6 +31,7 @@
 
 
 @import UIKit;
+@import WebKit;
 #import "ORKHelpers_Private.h"
 #import "ORKTypes.h"
 #import "ORKErrors.h"
